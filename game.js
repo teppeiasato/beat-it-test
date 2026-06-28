@@ -7,7 +7,7 @@ const config = {
         mode: Phaser.Scale.FIT,
         autoCenter: Phaser.Scale.CENTER_BOTH
     },
-    // 🔊 【追加】iPadの消音モード（ベル赤）でも音を強制的に鳴らす設定
+    // 🔊 iPadの消音モード（ベル赤）でも音を強制的に鳴らす設定
     audio: {
         disableWebAudio: true
     },
@@ -430,6 +430,10 @@ function triggerDamageEffect() {
     
     if(timerEvent) timerEvent.remove();
     this.sound.stopAll();
+    
+    // 🔊 連続で間違えても確実に笑い声が鳴るように、一度音の状態をストップしてリセット
+    let hahaSound = this.sound.get('shout_haha');
+    if (hahaSound) { hahaSound.stop(); } 
     this.sound.play('shout_haha'); 
     
     this.cameras.main.flash(200, 255, 0, 0, 0.5);
