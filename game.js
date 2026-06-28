@@ -7,6 +7,10 @@ const config = {
         mode: Phaser.Scale.FIT,
         autoCenter: Phaser.Scale.CENTER_BOTH
     },
+    // 🔊 【追加】iPadの消音モード（ベル赤）でも音を強制的に鳴らす設定
+    audio: {
+        disableWebAudio: true
+    },
     scene: {
         preload: preload,
         create: create,
@@ -436,7 +440,7 @@ function triggerDamageEffect() {
         buzzMonster.setDepth(100); 
 
         this.tweens.add({
-            targets: Myers = buzzMonster,
+            targets: buzzMonster,
             x: 512,
             y: 384,
             displayWidth: 1100, 
@@ -464,7 +468,6 @@ function handleCorrectAnswer(q) {
     
     let listLength = (isReviewMode) ? wrongQuestions.length : activeQuestions.length;
     if (listLength > 0) {
-        // ⭕【修正】端数が出ないよう、1問あたりのスコアを足した後にキレイに四捨五入して蓄積します
         score += (100 / listLength);
     }
 
@@ -648,21 +651,17 @@ function createDragUI(q) {
         block.wordValue = word; 
         block.currentSlotIndex = -1;
         
-        // 👆【新機能】タップ（クリック）操作時の自動スロット移動・解除システム
         block.on('pointerdown', (pointer) => {
-            // ドラッグ開始時のわずかなクリックは無視する処理
             block.clickStartX = pointer.x;
             block.clickStartY = pointer.y;
         });
 
         block.on('pointerup', (pointer) => {
-            if (currentQuestionState !== "PLAYING" || isEvaluating) return;
+            if (currentQuestionState !== "PLAYING" || isEvaluating || game.scene.scenes[0].nextInputGuard) return;
             
-            // 少しでも大きくドラッグされた場合はタップ処理を行わない
             let dist = Phaser.Math.Distance.Between(block.clickStartX, block.clickStartY, pointer.x, pointer.y);
             if (dist > 7) return;
 
-            // ケースA: すでにスロットに入っている場合 ⇒ タップで「キャンセル（元の位置に戻る）」
             if (block.currentSlotIndex !== -1) {
                 slots[block.currentSlotIndex].occupied = false;
                 block.currentSlotIndex = -1;
@@ -675,7 +674,6 @@ function createDragUI(q) {
                     ease: 'Back.easeOut'
                 });
             } 
-            // ケースB: まだ下にいる場合 ⇒ タップで「空いている左端のスロットに自動挿入」
             else {
                 let freeSlotIndex = slots.findIndex(s => !s.occupied);
                 if (freeSlotIndex !== -1) {
@@ -789,7 +787,12 @@ function showExplanation(isCorrect) {
         
         const proceedToNext = () => { 
             if (currentExpContainer) { currentExpContainer.destroy(); currentExpContainer = null; }
-            currentQuestionIndex++; startQuestion.call(this); 
+            currentQuestionIndex++; 
+            
+            this.nextInputGuard = true;
+            this.time.delayedCall(100, () => { this.nextInputGuard = false; });
+            
+            startQuestion.call(this); 
         };
         nextBtn.on('pointerdown', proceedToNext);
         onNextCallback = proceedToNext; 
@@ -804,7 +807,12 @@ function showExplanation(isCorrect) {
         };
         const proceedToNext = () => { 
             if (currentExpContainer) { currentExpContainer.destroy(); currentExpContainer = null; }
-            currentQuestionIndex++; startQuestion.call(this); 
+            currentQuestionIndex++; 
+            
+            this.nextInputGuard = true;
+            this.time.delayedCall(100, () => { this.nextInputGuard = false; });
+            
+            startQuestion.call(this); 
         };
         
         retryBtn.on('pointerdown', proceedToRetry);
@@ -824,7 +832,7 @@ function showResultScreen() {
     extraBuzzGroup.clear(true, true);
     if(buzzMonster) { if(buzzMonster.flapTimer) buzzMonster.flapTimer.remove(); buzzMonster.destroy(); buzzMonster = null; }
     
-    let finalScore = Math.round(score); // 👈 きれいに四捨五入した最終結果
+    let finalScore = Math.round(score); 
 
     let resContainer = this.add.container(512, 384);
     let box = this.add.graphics();
@@ -839,9 +847,8 @@ function showResultScreen() {
     if (!isReviewMode) sendScoreToGAS(finalScore, `完全クリア (Mode: ${currentSelectedMode})`, statusText);
     else statusText.setText("復習完了 (再送信なし)");
     
-    // 🏆【iOS完全対応】80%以上（80点以上）なら、HTML5ビデオを最前面に生成して確実にMP4を大迫力再生！
     if (finalScore >= 80) {
-        this.sound.play('shout_howl'); // マイケルの雄叫び
+        this.sound.play('shout_howl'); 
 
         let videoEl = document.createElement('video');
         videoEl.id = 'confetti-video-player';
@@ -854,13 +861,12 @@ function showResultScreen() {
         videoEl.style.width = '100%';
         videoEl.style.height = '100%';
         videoEl.style.objectFit = 'cover';
-        videoEl.style.zIndex = '9999';         // 完全に一番手前
-        videoEl.style.pointerEvents = 'none';   // 下のボタン操作を邪魔しない
-        videoEl.style.mixBlendMode = 'screen';  // 黒背景を完全に透過させる魔法の設定
+        videoEl.style.zIndex = '9999';         
+        videoEl.style.pointerEvents = 'none';   
+        videoEl.style.mixBlendMode = 'screen';  
 
         document.body.appendChild(videoEl);
 
-        // 4秒後に自動消去
         this.time.delayedCall(4000, () => {
             let el = document.getElementById('confetti-video-player');
             if (el) el.remove();
